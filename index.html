@@ -51,7 +51,7 @@
 <div class="bar">
   <input id="search" type="search" placeholder="Zoek op bestandsnaam…">
   <select id="linkType" title="Soort link">
-    <option value="pages">Link: GitHub Pages</option>
+    <option value="pages">Link: deze site</option>
     <option value="raw">Link: raw.githubusercontent</option>
     <option value="jsdelivr">Link: jsDelivr CDN</option>
   </select>
@@ -60,12 +60,14 @@
 
 <script>
 /* ===== INSTELLINGEN =====
-   Op GitHub Pages worden OWNER en REPO automatisch herkend.
-   Vul ze hier in als je de pagina ergens anders opent. */
+   Op *.github.io worden OWNER en REPO automatisch herkend.
+   Gebruik je een EIGEN DOMEIN (bijv. cdn.jouwsite.nl)? Vul OWNER en REPO
+   dan hier in — vanaf het domein kan de pagina niet zien welke repo het is.
+   De gekopieerde links gebruiken wél automatisch je eigen domein. */
 const CONFIG = {
-  OWNER: "",          // bijv. "kyan"
-  REPO: "",           // bijv. "cdn"
-  BRANCH: "",         // leeg = standaard branch van de repo
+  OWNER: "Kykyboo",          // bijv. "kyan"
+  REPO: "CDN-Westdam",           // bijv. "cdn"
+  BRANCH: "main",         // leeg = standaard branch van de repo
   FOLDER: "cdn"       // map met afbeeldingen ("" = hele repo)
 };
 /* ======================== */
@@ -78,17 +80,26 @@ const linkType = document.getElementById("linkType");
 let files = [], owner, repo, branch, pagesBase;
 
 function detectRepo() {
-  owner = CONFIG.OWNER; repo = CONFIG.REPO;
+  // Volgorde: ?repo=eigenaar/repo in de URL  >  CONFIG  >  automatisch (*.github.io)
+  const param = new URLSearchParams(location.search).get("repo");
+  if (param && param.includes("/")) [owner, repo] = param.split("/");
+  else { owner = CONFIG.OWNER; repo = CONFIG.REPO; }
+
   const host = location.hostname;
   if (host.endsWith(".github.io")) {
     const user = host.split(".")[0];
     const first = location.pathname.split("/").filter(Boolean)[0];
-    owner = owner || user;
-    // Project-site: user.github.io/repo/  —  User-site: user.github.io/
     const isProject = first && !/\.html?$/i.test(first);
+    owner = owner || user;
     repo = repo || (isProject ? first : host);
-    pagesBase = location.origin + (isProject ? "/" + first + "/" : "/");
+  }
+
+  if (location.protocol.startsWith("http")) {
+    // Werkt op github.io én op een eigen (custom) domein:
+    // links beginnen bij de map waar deze index.html staat.
+    pagesBase = new URL(".", location.href).href;
   } else if (owner && repo) {
+    // Lokaal geopend (file://): val terug op het github.io-adres
     pagesBase = repo.toLowerCase() === (owner + ".github.io").toLowerCase()
       ? `https://${owner}.github.io/`
       : `https://${owner}.github.io/${repo}/`;
@@ -147,7 +158,7 @@ async function load() {
   detectRepo();
   if (!owner || !repo) {
     sub.textContent = "Repo niet gevonden";
-    grid.innerHTML = `<div class="msg">Zet deze pagina op GitHub Pages, of vul OWNER en REPO in bovenaan de code.</div>`;
+    grid.innerHTML = `<div class="msg">Eigen domein? Vul OWNER en REPO in bij de INSTELLINGEN bovenaan het script in index.html (of open de pagina met ?repo=eigenaar/repo achter het adres).</div>`;
     return;
   }
   try {
