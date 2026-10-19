@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CDN Afbeeldingen</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #6b7280;
+    --border: #e3e6eb; --accent: #2563eb; --accent-text: #ffffff; --ok: #16a34a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --card: #181b21; --text: #e7e9ee; --muted: #9aa1ad;
+      --border: #2a2f38; --accent: #3b82f6; --accent-text: #ffffff; --ok: #22c55e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 24px 16px 8px; max-width: 1200px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 24px; }
+  .sub { color: var(--muted); margin: 0; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; max-width: 1200px; margin: 0 auto; }
+  .bar input, .bar select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+         background: var(--card); color: var(--text); font: inherit; }
+  .bar input { flex: 1 1 240px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 40px;
+         display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+          display: flex; flex-direction: column; }
+  .thumb { aspect-ratio: 4 / 3; display: flex; align-items: center; justify-content: center;
+           background: repeating-conic-gradient(var(--border) 0 25%, transparent 0 50%) 50% / 16px 16px; }
+  .thumb img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .info { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .name { font-weight: 600; word-break: break-all; font-size: 14px; }
+  .row { display: flex; gap: 6px; }
+  .row input { flex: 1; min-width: 0; padding: 6px 8px; font: 12px ui-monospace, Consolas, monospace;
+               border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+  button { padding: 6px 12px; border: 0; border-radius: 6px; background: var(--accent);
+           color: var(--accent-text); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  button.ok { background: var(--ok); }
+  .msg { grid-column: 1 / -1; color: var(--muted); text-align: center; padding: 40px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>CDN Afbeeldingen</h1>
+  <p class="sub" id="sub">Laden…</p>
+</header>
+<div class="bar">
+  <input id="search" type="search" placeholder="Zoek op bestandsnaam…">
+  <select id="linkType" title="Soort link">
+    <option value="pages">Link: GitHub Pages</option>
+    <option value="raw">Link: raw.githubusercontent</option>
+    <option value="jsdelivr">Link: jsDelivr CDN</option>
+  </select>
+</div>
+<main id="grid"><div class="msg">Afbeeldingen laden…</div></main>
+
+<script>
+/* ===== INSTELLINGEN =====
+   Op GitHub Pages worden OWNER en REPO automatisch herkend.
+   Vul ze hier in als je de pagina ergens anders opent. */
+const CONFIG = {
+  OWNER: "",          // bijv. "kyan"
+  REPO: "",           // bijv. "cdn"
+  BRANCH: "",         // leeg = standaard branch van de repo
+  FOLDER: "cdn"       // map met afbeeldingen ("" = hele repo)
+};
+/* ======================== */
+
+const IMG_EXT = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico)$/i;
+const grid = document.getElementById("grid");
+const sub = document.getElementById("sub");
+const search = document.getElementById("search");
+const linkType = document.getElementById("linkType");
+let files = [], owner, repo, branch, pagesBase;
+
+function detectRepo() {
+  owner = CONFIG.OWNER; repo = CONFIG.REPO;
+  const host = location.hostname;
+  if (host.endsWith(".github.io")) {
+    const user = host.split(".")[0];
+    const first = location.pathname.split("/").filter(Boolean)[0];
+    owner = owner || user;
+    // Project-site: user.github.io/repo/  —  User-site: user.github.io/
+    const isProject = first && !/\.html?$/i.test(first);
+    repo = repo || (isProject ? first : host);
+    pagesBase = location.origin + (isProject ? "/" + first + "/" : "/");
+  } else if (owner && repo) {
+    pagesBase = repo.toLowerCase() === (owner + ".github.io").toLowerCase()
+      ? `https://${owner}.github.io/`
+      : `https://${owner}.github.io/${repo}/`;
+  }
+}
+
+function linkFor(path) {
+  const p = path.split("/").map(encodeURIComponent).join("/");
+  switch (linkType.value) {
+    case "raw": return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${p}`;
+    case "jsdelivr": return `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${branch}/${p}`;
+    default: return pagesBase + p;
+  }
+}
+
+function render() {
+  const q = search.value.trim().toLowerCase();
+  const list = files.filter(f => f.toLowerCase().includes(q));
+  grid.innerHTML = "";
+  if (!list.length) {
+    grid.innerHTML = `<div class="msg">${files.length ? "Geen resultaten." : "Geen afbeeldingen gevonden in de map “" + CONFIG.FOLDER + "”."}</div>`;
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  for (const path of list) {
+    const url = linkFor(path);
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <a class="thumb" href="${url}" target="_blank" rel="noopener"><img loading="lazy" alt=""></a>
+      <div class="info">
+        <div class="name"></div>
+        <div class="row"><input readonly><button>Kopieer</button></div>
+      </div>`;
+    card.querySelector("img").src = url;
+    card.querySelector("img").alt = path;
+    card.querySelector(".name").textContent = path.split("/").pop();
+    const input = card.querySelector("input");
+    input.value = url;
+    input.addEventListener("focus", () => input.select());
+    const btn = card.querySelector("button");
+    btn.addEventListener("click", () => copy(url, input, btn));
+    frag.appendChild(card);
+  }
+  grid.appendChild(frag);
+}
+
+async function copy(text, input, btn) {
+  try { await navigator.clipboard.writeText(text); }
+  catch { input.select(); document.execCommand("copy"); }
+  btn.textContent = "Gekopieerd!"; btn.classList.add("ok");
+  setTimeout(() => { btn.textContent = "Kopieer"; btn.classList.remove("ok"); }, 1500);
+}
+
+async function load() {
+  detectRepo();
+  if (!owner || !repo) {
+    sub.textContent = "Repo niet gevonden";
+    grid.innerHTML = `<div class="msg">Zet deze pagina op GitHub Pages, of vul OWNER en REPO in bovenaan de code.</div>`;
+    return;
+  }
+  try {
+    const api = `https://api.github.com/repos/${owner}/${repo}`;
+    branch = CONFIG.BRANCH;
+    if (!branch) {
+      const r = await fetch(api);
+      if (!r.ok) throw new Error("Repo niet bereikbaar (" + r.status + ")");
+      branch = (await r.json()).default_branch;
+    }
+    const t = await fetch(`${api}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
+    if (!t.ok) throw new Error("Bestanden laden mislukt (" + t.status + ")");
+    const tree = (await t.json()).tree || [];
+    const prefix = CONFIG.FOLDER ? CONFIG.FOLDER.replace(/\/+$/, "") + "/" : "";
+    files = tree
+      .filter(x => x.type === "blob" && x.path.startsWith(prefix) && IMG_EXT.test(x.path))
+      .map(x => x.path)
+      .sort((a, b) => a.localeCompare(b, "nl", { numeric: true }));
+    sub.textContent = `${files.length} afbeelding${files.length === 1 ? "" : "en"} in ${owner}/${repo}/${CONFIG.FOLDER || ""}`;
+    render();
+  } catch (e) {
+    sub.textContent = "Fout bij laden";
+    grid.innerHTML = `<div class="msg">${e.message}. Is de repo openbaar?</div>`;
+  }
+}
+
+search.addEventListener("input", render);
+linkType.addEventListener("change", render);
+load();
+</script>
+</body>
+</html>
